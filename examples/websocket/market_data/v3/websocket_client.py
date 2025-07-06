@@ -71,4 +71,4 @@ async def fetch_market_data():
 
 
 # Execute the function to fetch market data
-asyncio.run(fetch_market_data())
+asyncio.run(fetch_market_data)

@@ -1,20 +1,53 @@
-# Import necessary modules
 import asyncio
 import json
 import ssl
-import upstox_client
 import websockets
+import requests
 from google.protobuf.json_format import MessageToDict
+import urllib.parse
+import os
+import sys
+from threading import Thread
+from time import sleep
+import pandas as pd
+os.chdir("X:/richa - Personal/Documents/AlgoTrading/Richa/upstox-python/examples/websocket/market_data/")
+import MarketDataFeedV3_pb2 as pb
+import upstox_access as ua
 
-import MarketDataFeed_pb2 as pb
+
+apikey = '2a3bbf7d-8bd5-49f5-9a66-6e5388308e63'
+secretkey = 'alqbcayzko'
+rurl = urllib.parse.quote('https://www.google.com', safe = "")
+uri = f'https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id={apikey}&redirect_uri={rurl}'
+uri
+code = 'fsYpxW'
+access_token=ua.authorization(apikey,secretkey,code)['access_token']
+access_token
 
 
-def get_market_data_feed_authorize(api_version, configuration):
+#filename =f"X:/richa - Personal/Documents/AlgoTrading/Richa/access_token.txt"
+access_token=open('access_token.txt').read().strip()
+  
+
+
+symbols=['NSE_INDEX|Nifty 50']  ##['NSE_EQ|INE040A01034','MCX_FO|453231','NSE_FO|98964']
+marketData=ua.market_data(access_token,symbols)
+ltp=marketData['close'].item()
+ltp
+  
+
+def get_market_data_feed_authorize_v3(access_token):
     """Get authorization for market data feed."""
-    api_instance = upstox_client.WebsocketApi(
-        upstox_client.ApiClient(configuration))
-    api_response = api_instance.get_market_data_feed_authorize(api_version)
-    return api_response
+    
+    headers = {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer '+access_token
+    }
+    url = 'https://api.upstox.com/v3/feed/market-data-feed/authorize'
+    api_response = requests.get(url=url, headers=headers)
+    return api_response.json()
+
+
 
 
 def decode_protobuf(buffer):
@@ -32,18 +65,11 @@ async def fetch_market_data():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    # Configure OAuth2 access token for authorization
-    configuration = upstox_client.Configuration()
-
-    api_version = '2.0'
-    configuration.access_token = 'ACCESS_TOKEN'
-
     # Get market data feed authorization
-    response = get_market_data_feed_authorize(
-        api_version, configuration)
-
+    response = get_market_data_feed_authorize_v3(access_token)
+    print(response)
     # Connect to the WebSocket with SSL context
-    async with websockets.connect(response.data.authorized_redirect_uri, ssl=ssl_context) as websocket:
+    async with websockets.connect(response["data"]["authorized_redirect_uri"], ssl=ssl_context) as websocket:
         print('Connection established')
 
         await asyncio.sleep(1)  # Wait for 1 second
@@ -54,25 +80,26 @@ async def fetch_market_data():
             "method": "sub",
             "data": {
                 "mode": "full",
-                "instrumentKeys": ["NSE_INDEX|Nifty Bank", "NSE_INDEX|Nifty 50"]
+                "instrumentKeys": [ "NSE_INDEX|Nifty 50"]
             }
         }
 
         # Convert data to binary and send over WebSocket
         binary_data = json.dumps(data).encode('utf-8')
+        print(binary_data)
         await websocket.send(binary_data)
 
         # Continuously receive and decode data from WebSocket
         while True:
             message = await websocket.recv()
             decoded_data = decode_protobuf(message)
+            print(decoded_data)
 
             # Convert the decoded data to a dictionary
             data_dict = MessageToDict(decoded_data)
 
             # Print the dictionary representation
             print(json.dumps(data_dict))
-
-
+            
 # Execute the function to fetch market data
 asyncio.run(fetch_market_data())
